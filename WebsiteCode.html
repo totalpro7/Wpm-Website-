@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WPM Tippgeschwindigkeitstest</title>
+  <style>
+    /* Einfaches, klares Styling für Einsteiger */
+    :root{font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f4f6f8;color:#111}
+    .card{width:820px;max-width:95%;background:#fff;border-radius:12px;box-shadow:0 6px 30px rgba(10,10,20,0.06);padding:28px}
+    h1{margin:0 0 12px;font-size:20px}
+    .text-area{background:#f7fbff;border:1px solid #e5eff9;padding:18px;border-radius:8px;min-height:140px;font-size:20px;line-height:1.5;overflow:auto}
+    .text-area span{white-space:pre-wrap}
+    .controls{display:flex;gap:12px;margin-top:14px;align-items:center}
+    .controls button{padding:8px 12px;border-radius:8px;border:1px solid #d0d7df;background:#fff;cursor:pointer}
+    .stats{display:flex;gap:18px;margin-top:12px}
+    .stat{background:#fbfdff;border:1px solid #eef6ff;padding:10px 14px;border-radius:8px}
+    .input{margin-top:12px}
+    textarea{width:100%;min-height:80px;padding:12px;font-size:18px;border-radius:8px;border:1px solid #dcdcdc;box-sizing:border-box}
+    .char.correct{color:green}
+    .char.incorrect{color:red;text-decoration:underline}
+    .char.current{background:rgba(0,120,255,0.08);border-bottom:2px solid rgba(0,120,255,0.2)}
+    .footer-note{font-size:13px;color:#6b7280;margin-top:12px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>WPM Tippgeschwindigkeitstest</h1>
+
+    <div class="text-area" id="textArea" aria-live="polite"></div>
+
+    <div class="controls">
+      <select id="sampleSelect">
+        <option value="0">Kurzer Satz</option>
+        <option value="1">Mehrere Sätze</option>
+        <option value="2">Zufälliger Absatz</option>
+      </select>
+      <button id="restartBtn">Neu starten</button>
+      <button id="changeBtn">Neuen Text</button>
+      <div style="margin-left:auto">Zeit: <strong id="time">0:00</strong></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">WPM: <strong id="wpm">0</strong></div>
+      <div class="stat">CPM: <strong id="cpm">0</strong></div>
+      <div class="stat">Accuracy: <strong id="acc">100%</strong></div>
+    </div>
+
+    <div class="input">
+      <textarea id="input" placeholder="Hier tippen — die Zeit startet bei deinem ersten Zeichen"></textarea>
+    </div>
+
+    <div class="footer-note">Hinweis: WPM berechnet sich hier als (korrekte Zeichen / 5) ÷ Minuten. Dieser Standard geht davon aus, dass ein Wort durchschnittlich 5 Zeichen hat.</div>
+  </div>
+
+  <script>
+    // --- Beispieltexte ---
+    const SAMPLES = [
+      "Das ist ein kurzer Test.",
+      "Übung macht den Meister. Tipp so schnell und genau wie möglich, aber mach dir keinen Druck.",
+      "In einer ruhigen Umgebung kannst du deutlich schneller und genauer tippen. Regelmäßiges Training verbessert deine Geschwindigkeit und Genauigkeit nachhaltig."
+    ];
+
+    // Elemente
+    const textArea = document.getElementById('textArea');
+    const input = document.getElementById('input');
+    const timeDisplay = document.getElementById('time');
+    const wpmDisplay = document.getElementById('wpm');
+    const cpmDisplay = document.getElementById('cpm');
+    const accDisplay = document.getElementById('acc');
+    const restartBtn = document.getElementById('restartBtn');
+    const changeBtn = document.getElementById('changeBtn');
+    const sampleSelect = document.getElementById('sampleSelect');
+
+    let chars = []; // Array der Zeichen-Spans
+    let startTime = null;
+    let timerInterval = null;
+
+    function loadSample(index = 0) {
+      const text = SAMPLES[index % SAMPLES.length];
+      textArea.innerHTML = '';
+      chars = [];
+      for (const ch of text) {
+        const span = document.createElement('span');
+        span.textContent = ch;
+        span.className = 'char';
+        textArea.appendChild(span);
+        chars.push(span);
+      }
+      // Markiere das erste Zeichen
+      if (chars.length) chars[0].classList.add('current');
+      resetState();
+    }
+
+    function resetState() {
+      input.value = '';
+      startTime = null;
+      clearInterval(timerInterval);
+      timeDisplay.textContent = '0:00';
+      wpmDisplay.textContent = '0';
+      cpmDisplay.textContent = '0';
+      accDisplay.textContent = '100%';
+      chars.forEach(s => s.classList.remove('correct','incorrect','current'));
+      if (chars.length) chars[0].classList.add('current');
+    }
+
+    function startTimer() {
+      if (startTime) return;
+      startTime = Date.now();
+      timerInterval = setInterval(updateStats, 250);
+    }
+
+    function updateStats() {
+      const elapsedMs = Date.now() - startTime;
+      const seconds = Math.floor(elapsedMs / 1000);
+      const mm = Math.floor(seconds / 60);
+      const ss = seconds % 60;
+      timeDisplay.textContent = mm + ':' + String(ss).padStart(2,'0');
+
+      // Statistikberechnung
+      const typed = input.value;
+      let correctChars = 0;
+      let typedCount = typed.length;
+      for (let i = 0; i < typed.length; i++) {
+        if (!chars[i]) break;
+        if (typed[i] === chars[i].textContent) correctChars++;
+      }
+      const minutes = Math.max(elapsedMs / 60000, 1/60); // min 1 Sekunde als Schutz
+      const wpm = Math.round((correctChars / 5) / minutes);
+      const cpm = Math.round(correctChars / minutes);
+      const acc = typedCount === 0 ? 100 : Math.max(0, Math.round((correctChars / typedCount) * 100));
+
+      wpmDisplay.textContent = isFinite(wpm) ? wpm : 0;
+      cpmDisplay.textContent = isFinite(cpm) ? cpm : 0;
+      accDisplay.textContent = acc + '%';
+    }
+
+    // Vergleiche eingegebene Zeichen mit dem Zieltext und markiere die Spans
+    function refreshMarking() {
+      const typed = input.value;
+      for (let i = 0; i < chars.length; i++) {
+        const span = chars[i];
+        span.classList.remove('correct','incorrect','current');
+        const typedChar = typed[i];
+        if (typedChar === undefined) {
+          // noch nicht getippt
+        } else if (typedChar === span.textContent) {
+          span.classList.add('correct');
+        } else {
+          span.classList.add('incorrect');
+        }
+      }
+      // aktuelle Position
+      const curIndex = Math.min(typed.length, chars.length - 1);
+      if (chars[curIndex]) chars[curIndex].classList.add('current');
+    }
+
+    // Event-Listener
+    input.addEventListener('input', (e) => {
+      if (!startTime) startTimer();
+      refreshMarking();
+      updateStats();
+
+      // Wenn fertig getippt
+      if (input.value.length >= chars.length) {
+        clearInterval(timerInterval);
+      }
+    });
+
+    restartBtn.addEventListener('click', () => {
+      resetState();
+    });
+
+    changeBtn.addEventListener('click', () => {
+      const idx = Math.floor(Math.random() * SAMPLES.length);
+      sampleSelect.value = idx;
+      loadSample(idx);
+    });
+
+    sampleSelect.addEventListener('change', (e) => {
+      loadSample(parseInt(e.target.value, 10));
+    });
+
+    // Initial
+    loadSample(0);
+
+  </script>
+</body>
+</html>
